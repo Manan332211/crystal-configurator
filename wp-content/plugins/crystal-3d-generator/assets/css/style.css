@@ -1,0 +1,176 @@
+/* Container Setup */
+#crystal-container {
+    position: relative;
+    width: 100%;
+    height: 600px;
+    background: radial-gradient(circle, #2c3e50 0%, #000000 100%);
+    border-radius: 15px;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+#threejs-canvas {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+#threejs-canvas:active {
+    cursor: grabbing;
+}
+
+/* UI Overlay - The Glassmorphism Look */
+#ui-overlay {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 10;
+    pointer-events: none;
+    /* Allows clicking through to the 3D canvas */
+}
+
+.step {
+    pointer-events: auto;
+    /* Re-enable clicking for buttons */
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    max-width: 300px;
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* Typography & Buttons */
+h3 {
+    margin-top: 0;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #00d4ff;
+}
+
+button {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0;
+    background: #00d4ff;
+    border: none;
+    border-radius: 5px;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+button:hover {
+    background: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 212, 255, 0.4);
+}
+
+/* Checkbox & File Input Styling */
+input[type="file"] {
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+label {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    #crystal-container {
+        height: 400px;
+    }
+
+    #ui-overlay {
+        width: calc(100% - 40px);
+    }
+}
+
+
+/* Container for the toggle */
+.toggle-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 15px 0;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+
+/* The Switch itself */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #444;
+    transition: .4s;
+    border-radius: 20px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked+.slider {
+    background-color: #00d4ff;
+}
+
+input:checked+.slider:before {
+    transform: translateX(20px);
+}
+
+/* Loading State */
+.loading-overlay {
+    font-size: 12px;
+    color: #00d4ff;
+    font-style: italic;
+    display: none;
+}
