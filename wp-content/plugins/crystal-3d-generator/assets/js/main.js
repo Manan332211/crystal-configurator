@@ -184,8 +184,8 @@ function toggle3DPrint() {
 
         const img = new Image();
         img.onload = function () {
-            // Processing resolution (higher = much more dense points, clearer photo)
-            const detail = 180;
+            // Processing resolution (ULTRA high density for photorealism)
+            const detail = 250;
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
@@ -201,7 +201,7 @@ function toggle3DPrint() {
             const colors = [];
 
             // Match sizing logic from createImageInsideCrystal
-            const maxDimension = 1.8;
+            const maxDimension = 1.6;
             let planeWidth = maxDimension;
             let planeHeight = maxDimension;
             if (img.width > img.height) {
@@ -218,46 +218,56 @@ function toggle3DPrint() {
                     const b = imgData[idx + 2];
                     const a = imgData[idx + 3];
 
-                    // Ignore highly transparent pixels
-                    if (a < 20) continue;
+                    // Ignore transparent pixels to isolate subject
+                    if (a < 10) continue;
 
-                    const brightness = (r + g + b) / (3 * 255);
-                    // Skip nearly black pixels entirely (shadows don't engrave)
-                    if (brightness < 0.05) continue;
+                    // True Grayscale Luminance (0 to 1)
+                    const gray = (r * 0.3 + g * 0.59 + b * 0.11) / 255;
+                    
+                    // Skip near-black pixels (crystal remains hollow where it is dark)
+                    if (gray < 0.05) continue;
+
+                    // Probability Dithering: Darker pixels have a higher chance of being skipped 
+                    // This is the core secret of laser engraving: shading is achieved by fewer points!
+                    if (Math.random() > Math.pow(gray, 0.7)) continue;
 
                     // Normalized positions -0.5 to 0.5
                     const nx = x / canvas.width - 0.5;
                     const ny = y / canvas.height - 0.5;
 
                     const posX = nx * planeWidth;
-                    const posY = -ny * planeHeight; 
+                    const posY = -(ny * planeHeight); 
                     
-                    // 1. Smooth Geometric Bulge (Fakes a 3D bust/head curve)
-                    const bulgeScale = 0.25; 
-                    let bulge = Math.max(0, Math.cos(Math.abs(nx) * Math.PI)); // horizontal curve
-                    bulge *= Math.max(0, Math.cos(Math.abs(ny) * Math.PI * 0.8)); // vertical curve
-                    bulge *= bulgeScale;
+                    // 1. Pure Lithophane Shape-From-Shading (No artificial curves/eggs!)
+                    // The depth strictly follows the lighting of the photograph.
+                    // This creates a flat back with a perfectly sculpted 3D front face exactly like the reference.
+                    const finalZ = gray * 0.3; // Total extrusion depth
 
-                    // 2. Volumetric Extrusion
-                    // Brighter pixels get engraved deeper and denser into the block
-                    const thickness = brightness * 0.25; 
-                    const numPoints = Math.floor(brightness * 6) + 1; 
+                    // 2. Volumetric Layers (Density creates shading)
+                    // Bright areas generate points very deep into the crystal (Solid white blocks)
+                    // Dark areas generate fewer layers (thin dust)
+                    const maxLayers = 6;
+                    const activeLayers = Math.max(1, Math.ceil(gray * maxLayers)); 
 
-                    for (let p = 0; p < numPoints; p++) {
-                        // Scatter points to look like organic laser fractures
-                        const jitterX = (Math.random() - 0.5) * 0.005;
-                        const jitterY = (Math.random() - 0.5) * 0.005;
-                        const jitterZ = (Math.random() - 0.5) * 0.005;
+                    for (let p = 0; p < activeLayers; p++) {
+                        // Spread points backward into the block
+                        const depthOffset = -(p * 0.015);
                         
-                        // Push points backward to create volume
-                        const depthOffset = -(p / numPoints) * thickness;
-                        const finalZ = bulge + depthOffset;
+                        // Jitter scatters the points for an organic laser fracture look
+                        const jX = (Math.random() - 0.5) * 0.003;
+                        const jY = (Math.random() - 0.5) * 0.003;
+                        const jZ = (Math.random() - 0.5) * 0.003;
 
-                        positions.push(posX + jitterX, posY + jitterY, finalZ + jitterZ);
+                        positions.push(posX + jX, posY + jY, finalZ + depthOffset + jZ);
 
-                        // Warm white variations
-                        const tintVal = 0.85 + (Math.random() * 0.15);
-                        colors.push(1.0, tintVal, tintVal - 0.05);
+                        // True laser burns are ALWAYS white/warm-white, NOT gray/black
+                        // We lightly tint deeper points to sell the illusion of depth shadowing
+                        const shadowFade = 1.0 - (p * 0.1);
+                        colors.push(
+                            1.0 * shadowFade,             // R: Full white
+                            0.98 * shadowFade,            // G: Slightly warm
+                            0.96 * shadowFade             // B: Warm laser dust
+                        );
                     }
                 }
             }
@@ -266,9 +276,9 @@ function toggle3DPrint() {
             pointsGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
             const pointsMat = new THREE.PointsMaterial({
-                size: 0.003, // Smaller point size for denser clouds
+                size: 0.003, // Smallest size for max fidelity
                 vertexColors: true,
-                transparent: false // Must be opaque to refract properly
+                transparent: false // Solid opaque rendering so it refracts properly
             });
 
             pointCloudObj = new THREE.Points(pointsGeo, pointsMat);
