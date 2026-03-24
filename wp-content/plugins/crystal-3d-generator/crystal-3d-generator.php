@@ -10,12 +10,13 @@ if (!defined('ABSPATH')) exit;
 
 // Enqueue Three.js and our custom scripts
 add_action('wp_enqueue_scripts', function() {
-    wp_enqueue_script('three-js', 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js', array(), null, true);
+    wp_enqueue_script('three-js', 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.147.0/three.min.js', array(), null, true);
     // Add OrbitControls for rotation
-    wp_enqueue_script('three-orbit', 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js', array('three-js'), null, true);
+    wp_enqueue_script('three-orbit', 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js', array('three-js'), null, true);
+    wp_enqueue_script('three-room-env', 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js', array('three-js'), null, true);
     
     wp_enqueue_style('crystal-style', plugin_dir_url(__FILE__) . 'assets/css/style.css');
-    wp_enqueue_script('crystal-main', plugin_dir_url(__FILE__) . 'assets/js/main.js', array('three-js', 'three-orbit'), '1.0', true);
+    wp_enqueue_script('crystal-main', plugin_dir_url(__FILE__) . 'assets/js/main.js', array('three-js', 'three-orbit', 'three-room-env'), '1.0', true);
 
     // Pass PHP data to JS (like API endpoints)
     wp_localize_script('crystal-main', 'crystalApp', array(

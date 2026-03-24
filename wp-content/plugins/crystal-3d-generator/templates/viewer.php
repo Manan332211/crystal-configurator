@@ -4,7 +4,7 @@
             <h3>Select Your Crystal Shape</h3>
             <button onclick="setShape('diamond')">Diamond</button>
             <button onclick="setShape('cube')">Cube</button>
-            <button onclick="setShape('heart')">Heart</button>
+            <button onclick="setShape('sphere')">Sphere</button>
         </div>
 
         <div id="step-2" class="step" style="display:none;">

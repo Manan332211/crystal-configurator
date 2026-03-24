@@ -7,7 +7,10 @@ function init() {
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / 600, 0.1, 1000);
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, 600);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     document.getElementById('threejs-canvas').appendChild(renderer.domElement);
 
     // Lighting for that "Real Crystal" look
@@ -17,7 +20,17 @@ function init() {
     pointLight.position.set(5, 5, 5);
     scene.add(pointLight);
 
+    // Realistic HDRI-style environment lighting for glass
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmremGenerator.fromScene(new THREE.RoomEnvironment(), 0.04).texture;
+
     camera.position.z = 5;
+
+    // Initialize OrbitControls for manual movement
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; // adds smooth rotation
+    controls.dampingFactor = 0.05;
+
     animate();
 }
 
@@ -34,15 +47,17 @@ function setShape(type) {
         geometry = new THREE.SphereGeometry(1.5, 32, 32);
     }
 
-    // Physical Material for refraction/shining edges
+    // Physical Material for realistic refraction/shining edges
     const material = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         metalness: 0,
-        roughness: 0.05,
-        transmission: 0.9, // Transparency
-        thickness: 0.5,
-        envMapIntensity: 1,
-        clearcoat: 1
+        roughness: 0.02,
+        transmission: 1, // Full Transparency
+        thickness: 1.5,  // Volume thickness for refraction
+        ior: 1.5,        // Glass/Crystal index of refraction
+        envMapIntensity: 2.0, // Multiplies reflection brightness
+        clearcoat: 1,
+        clearcoatRoughness: 0.1
     });
 
     crystal = new THREE.Mesh(geometry, material);
@@ -102,6 +117,12 @@ function toggle3DPrint() {
 
 function animate() {
     requestAnimationFrame(animate);
-    if (crystal) crystal.rotation.y += 0.005;
+    
+    // Update controls for damping
+    if (controls) controls.update();
+    
+    // Disabled automatic rotation for manual control
+    // if (crystal) crystal.rotation.y += 0.005;
+    
     renderer.render(scene, camera);
 }
