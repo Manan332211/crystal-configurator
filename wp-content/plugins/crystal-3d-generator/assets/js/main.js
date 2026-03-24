@@ -1,6 +1,8 @@
 let scene, camera, renderer, crystal, imagePlane, controls;
 let currentMode = 'standard'; // 'standard' or 'laser'
 let originalImageDataUrl = null;
+let currentImageDataUrl = null;
+let pointCloudObj = null;
 
 init();
 
@@ -14,12 +16,19 @@ function init() {
     renderer.toneMappingExposure = 1.0;
     document.getElementById('threejs-canvas').appendChild(renderer.domElement);
 
-    // Lighting for that "Real Crystal" look
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    // Lighting for that "Real Crystal" look - Using Warm White lights!
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
-    const pointLight = new THREE.PointLight(0xffffff, 1);
+    
+    // Front Warm Point Light
+    const pointLight = new THREE.PointLight(0xffefd5, 2.5); // Papaya Whip / warm white
     pointLight.position.set(5, 5, 5);
     scene.add(pointLight);
+
+    // Back Warm Light for rim lighting the crystal and highlighting interior
+    const backLight = new THREE.PointLight(0xffeebb, 2.0);
+    backLight.position.set(-5, 3, -5);
+    scene.add(backLight);
 
     // Realistic HDRI-style environment lighting for glass
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -76,7 +85,8 @@ document.getElementById('imageUpload').addEventListener('change', function (e) {
     const reader = new FileReader();
     reader.onload = function (event) {
         originalImageDataUrl = event.target.result;
-        
+        currentImageDataUrl = event.target.result;
+
         // Uncheck remove background when a new file is uploaded
         document.getElementById('removeBg').checked = false;
 
@@ -86,13 +96,13 @@ document.getElementById('imageUpload').addEventListener('change', function (e) {
 });
 
 // BACKGROUND REMOVAL LOGIC
-document.getElementById('removeBg').addEventListener('change', function(e) {
+document.getElementById('removeBg').addEventListener('change', function (e) {
     if (!originalImageDataUrl) return;
 
     if (this.checked) {
         // Show loading indicator
         document.getElementById('bg-loading').style.display = 'block';
-        
+
         fetch(crystalApp.ajax_url, {
             method: 'POST',
             headers: {
@@ -104,21 +114,21 @@ document.getElementById('removeBg').addEventListener('change', function(e) {
                 image: originalImageDataUrl
             })
         })
-        .then(res => res.json())
-        .then(data => {
-            document.getElementById('bg-loading').style.display = 'none';
-            if (data.success && data.data.url) {
-                updateCrystalImage(data.data.url);
-            } else {
-                alert('Background removal failed: ' + (data.data || 'Try again'));
-                this.checked = false; // reset
-            }
-        })
-        .catch(err => {
-            document.getElementById('bg-loading').style.display = 'none';
-            alert('Error contacting server');
-            this.checked = false;
-        });
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('bg-loading').style.display = 'none';
+                if (data.success && data.data.url) {
+                    updateCrystalImage(data.data.url);
+                } else {
+                    alert('Background removal failed: ' + (data.data || 'Try again'));
+                    this.checked = false; // reset
+                }
+            })
+            .catch(err => {
+                document.getElementById('bg-loading').style.display = 'none';
+                alert('Error contacting server');
+                this.checked = false;
+            });
     } else {
         // Revert to original user image
         updateCrystalImage(originalImageDataUrl);
@@ -126,8 +136,9 @@ document.getElementById('removeBg').addEventListener('change', function(e) {
 });
 
 function updateCrystalImage(dataUrl) {
+    currentImageDataUrl = dataUrl;
     const img = new Image();
-    img.onload = function() {
+    img.onload = function () {
         const texture = new THREE.Texture(img);
         texture.needsUpdate = true;
         createImageInsideCrystal(texture, img.width, img.height);
@@ -169,28 +180,113 @@ function createImageInsideCrystal(texture, width, height) {
 // THE "PRO" LASER ENGRAVING EFFECT (Point Cloud)
 function toggle3DPrint() {
     if (currentMode === 'standard') {
-        // Convert the imagePlane into a Point Cloud
-        const width = 64, height = 64; // Resolution of "dots"
-        const pointsGeo = new THREE.BufferGeometry();
-        const positions = [];
-        const colors = [];
+        if (!currentImageDataUrl) return;
 
-        for (let i = 0; i < width * height; i++) {
-            // Logic to map image brightness to Z-depth (the 3D Engrave look)
-            let x = (i % width) / width - 0.5;
-            let y = Math.floor(i / width) / height - 0.5;
-            let z = (Math.random() * 0.1); // Add slight depth based on brightness in real version
-            positions.push(x * 2, y * 2, z);
-            colors.push(1, 1, 1);
-        }
+        const img = new Image();
+        img.onload = function () {
+            // Processing resolution (higher = much more dense points, clearer photo)
+            const detail = 180;
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
 
-        pointsGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        const pointsMat = new THREE.PointsMaterial({ size: 0.02, color: 0xffffff });
-        const pointCloud = new THREE.Points(pointsGeo, pointsMat);
+            const hwRatio = img.height / img.width;
+            canvas.width = detail;
+            canvas.height = Math.floor(detail * hwRatio);
 
-        crystal.remove(imagePlane);
-        crystal.add(pointCloud);
-        currentMode = 'laser';
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+            const pointsGeo = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = [];
+
+            // Match sizing logic from createImageInsideCrystal
+            const maxDimension = 1.8;
+            let planeWidth = maxDimension;
+            let planeHeight = maxDimension;
+            if (img.width > img.height) {
+                planeHeight = maxDimension * hwRatio;
+            } else {
+                planeWidth = maxDimension / hwRatio;
+            }
+
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const idx = (y * canvas.width + x) * 4;
+                    const r = imgData[idx];
+                    const g = imgData[idx + 1];
+                    const b = imgData[idx + 2];
+                    const a = imgData[idx + 3];
+
+                    // Ignore highly transparent pixels
+                    if (a < 20) continue;
+
+                    const brightness = (r + g + b) / (3 * 255);
+                    // Skip nearly black pixels entirely (shadows don't engrave)
+                    if (brightness < 0.05) continue;
+
+                    // Normalized positions -0.5 to 0.5
+                    const nx = x / canvas.width - 0.5;
+                    const ny = y / canvas.height - 0.5;
+
+                    const posX = nx * planeWidth;
+                    const posY = -ny * planeHeight; 
+                    
+                    // 1. Smooth Geometric Bulge (Fakes a 3D bust/head curve)
+                    const bulgeScale = 0.25; 
+                    let bulge = Math.max(0, Math.cos(Math.abs(nx) * Math.PI)); // horizontal curve
+                    bulge *= Math.max(0, Math.cos(Math.abs(ny) * Math.PI * 0.8)); // vertical curve
+                    bulge *= bulgeScale;
+
+                    // 2. Volumetric Extrusion
+                    // Brighter pixels get engraved deeper and denser into the block
+                    const thickness = brightness * 0.25; 
+                    const numPoints = Math.floor(brightness * 6) + 1; 
+
+                    for (let p = 0; p < numPoints; p++) {
+                        // Scatter points to look like organic laser fractures
+                        const jitterX = (Math.random() - 0.5) * 0.005;
+                        const jitterY = (Math.random() - 0.5) * 0.005;
+                        const jitterZ = (Math.random() - 0.5) * 0.005;
+                        
+                        // Push points backward to create volume
+                        const depthOffset = -(p / numPoints) * thickness;
+                        const finalZ = bulge + depthOffset;
+
+                        positions.push(posX + jitterX, posY + jitterY, finalZ + jitterZ);
+
+                        // Warm white variations
+                        const tintVal = 0.85 + (Math.random() * 0.15);
+                        colors.push(1.0, tintVal, tintVal - 0.05);
+                    }
+                }
+            }
+
+            pointsGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            pointsGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+            const pointsMat = new THREE.PointsMaterial({
+                size: 0.003, // Smaller point size for denser clouds
+                vertexColors: true,
+                transparent: false // Must be opaque to refract properly
+            });
+
+            pointCloudObj = new THREE.Points(pointsGeo, pointsMat);
+            
+            // Hide standard image, show point cloud
+            if (imagePlane) crystal.remove(imagePlane);
+            crystal.add(pointCloudObj);
+
+            document.querySelector('#step-3 button').innerText = "View Standard Photo";
+            currentMode = 'laser';
+        };
+        img.src = currentImageDataUrl;
+    } else {
+        // Switch back to standard mode
+        if (pointCloudObj) crystal.remove(pointCloudObj);
+        updateCrystalImage(currentImageDataUrl);
+        document.querySelector('#step-3 button').innerText = "View Laser Engraved (3D Print)";
+        currentMode = 'standard';
     }
 }
 
