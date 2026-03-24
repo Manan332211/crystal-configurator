@@ -1,5 +1,6 @@
 let scene, camera, renderer, crystal, imagePlane, controls;
 let currentMode = 'standard'; // 'standard' or 'laser'
+let originalImageDataUrl = null;
 
 init();
 
@@ -69,20 +70,98 @@ function setShape(type) {
 
 // IMAGE LOADING & 3D ENGRAVING LOGIC
 document.getElementById('imageUpload').addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
     const reader = new FileReader();
     reader.onload = function (event) {
-        const texture = new THREE.TextureLoader().load(event.target.result);
-        createImageInsideCrystal(texture);
+        originalImageDataUrl = event.target.result;
+        
+        // Uncheck remove background when a new file is uploaded
+        document.getElementById('removeBg').checked = false;
+
+        updateCrystalImage(originalImageDataUrl);
     };
-    reader.readAsDataURL(e.target.files[0]);
+    reader.readAsDataURL(file);
 });
 
-function createImageInsideCrystal(texture) {
-    const geo = new THREE.PlaneGeometry(1.5, 1.5);
-    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+// BACKGROUND REMOVAL LOGIC
+document.getElementById('removeBg').addEventListener('change', function(e) {
+    if (!originalImageDataUrl) return;
+
+    if (this.checked) {
+        // Show loading indicator
+        document.getElementById('bg-loading').style.display = 'block';
+        
+        fetch(crystalApp.ajax_url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'remove_background',
+                security: crystalApp.nonce,
+                image: originalImageDataUrl
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('bg-loading').style.display = 'none';
+            if (data.success && data.data.url) {
+                updateCrystalImage(data.data.url);
+            } else {
+                alert('Background removal failed: ' + (data.data || 'Try again'));
+                this.checked = false; // reset
+            }
+        })
+        .catch(err => {
+            document.getElementById('bg-loading').style.display = 'none';
+            alert('Error contacting server');
+            this.checked = false;
+        });
+    } else {
+        // Revert to original user image
+        updateCrystalImage(originalImageDataUrl);
+    }
+});
+
+function updateCrystalImage(dataUrl) {
+    const img = new Image();
+    img.onload = function() {
+        const texture = new THREE.Texture(img);
+        texture.needsUpdate = true;
+        createImageInsideCrystal(texture, img.width, img.height);
+    }
+    img.src = dataUrl;
+}
+
+function createImageInsideCrystal(texture, width, height) {
+    if (imagePlane) crystal.remove(imagePlane); // Remove old image if any
+
+    // Calculate aspect ratio and fit within max bounds
+    const maxDimension = 1.8; // safe size inside all shapes
+    let planeWidth = maxDimension;
+    let planeHeight = maxDimension;
+
+    if (width > height) {
+        planeHeight = maxDimension * (height / width);
+    } else {
+        planeWidth = maxDimension * (width / height);
+    }
+
+    const geo = new THREE.PlaneGeometry(planeWidth, planeHeight);
+
+    // Using transparent: false and alphaTest ensures the texture is rendered in the 
+    // opaque pass, which is required for it to be visible through physical transmission (glass).
+    const mat = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: false,
+        alphaTest: 0.1,  // Allows transparent backgrounds once BG removal is active
+        side: THREE.DoubleSide
+    });
     imagePlane = new THREE.Mesh(geo, mat);
 
-    // Nest the image inside the crystal group
+    // Nest the image inside the crystal center
     crystal.add(imagePlane);
     document.getElementById('step-3').style.display = 'block';
 }
@@ -117,12 +196,12 @@ function toggle3DPrint() {
 
 function animate() {
     requestAnimationFrame(animate);
-    
+
     // Update controls for damping
     if (controls) controls.update();
-    
+
     // Disabled automatic rotation for manual control
     // if (crystal) crystal.rotation.y += 0.005;
-    
+
     renderer.render(scene, camera);
 }
