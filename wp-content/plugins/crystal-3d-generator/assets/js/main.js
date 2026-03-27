@@ -19,7 +19,7 @@ function init() {
     // Lighting for that "Real Crystal" look - Using Warm White lights!
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
-    
+
     // Front Warm Point Light
     const pointLight = new THREE.PointLight(0xffefd5, 2.5); // Papaya Whip / warm white
     pointLight.position.set(5, 5, 5);
@@ -46,6 +46,8 @@ function init() {
 
 function setShape(type) {
     if (crystal) scene.remove(crystal);
+
+    localStorage.setItem('saved_crystal_shape', type);
 
     let geometry;
     if (type === 'diamond') {
@@ -86,6 +88,12 @@ document.getElementById('imageUpload').addEventListener('change', function (e) {
     reader.onload = function (event) {
         originalImageDataUrl = event.target.result;
         currentImageDataUrl = event.target.result;
+
+        try {
+            localStorage.setItem('saved_crystal_image', originalImageDataUrl);
+        } catch (e) {
+            console.warn("Could not save image to localStorage, file might be too large: ", e);
+        }
 
         // Uncheck remove background when a new file is uploaded
         document.getElementById('removeBg').checked = false;
@@ -223,7 +231,7 @@ function toggle3DPrint() {
 
                     // True Grayscale Luminance (0 to 1)
                     const gray = (r * 0.3 + g * 0.59 + b * 0.11) / 255;
-                    
+
                     // Skip near-black pixels (crystal remains hollow where it is dark)
                     if (gray < 0.05) continue;
 
@@ -236,8 +244,8 @@ function toggle3DPrint() {
                     const ny = y / canvas.height - 0.5;
 
                     const posX = nx * planeWidth;
-                    const posY = -(ny * planeHeight); 
-                    
+                    const posY = -(ny * planeHeight);
+
                     // 1. Pure Lithophane Shape-From-Shading (No artificial curves/eggs!)
                     // The depth strictly follows the lighting of the photograph.
                     // This creates a flat back with a perfectly sculpted 3D front face exactly like the reference.
@@ -247,12 +255,12 @@ function toggle3DPrint() {
                     // Bright areas generate points very deep into the crystal (Solid white blocks)
                     // Dark areas generate fewer layers (thin dust)
                     const maxLayers = 6;
-                    const activeLayers = Math.max(1, Math.ceil(gray * maxLayers)); 
+                    const activeLayers = Math.max(1, Math.ceil(gray * maxLayers));
 
                     for (let p = 0; p < activeLayers; p++) {
                         // Spread points backward into the block
                         const depthOffset = -(p * 0.015);
-                        
+
                         // Jitter scatters the points for an organic laser fracture look
                         const jX = (Math.random() - 0.5) * 0.003;
                         const jY = (Math.random() - 0.5) * 0.003;
@@ -282,7 +290,7 @@ function toggle3DPrint() {
             });
 
             pointCloudObj = new THREE.Points(pointsGeo, pointsMat);
-            
+
             // Hide standard image, show point cloud
             if (imagePlane) crystal.remove(imagePlane);
             crystal.add(pointCloudObj);
@@ -311,3 +319,43 @@ function animate() {
 
     renderer.render(scene, camera);
 }
+
+// AUTO-RESTORE FOR DEVELOPMENT (Saves time on refresh)
+document.addEventListener('DOMContentLoaded', () => {
+    // Detect clicks on the site logo to clear saved data and "Start New"
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('a');
+        if (link) {
+            // Check common WordPress logo classes or links to homepage containing an image
+            const isLogo = link.classList.contains('custom-logo-link') || 
+                           link.classList.contains('site-logo') || 
+                           link.getAttribute('rel') === 'home' ||
+                           (link.href === window.location.origin + '/' && link.querySelector('img'));
+            
+            if (isLogo) {
+                localStorage.removeItem('saved_crystal_shape');
+                localStorage.removeItem('saved_crystal_image');
+            }
+        }
+    });
+
+    // Small delay ensures the DOM buttons and initial setups are ready
+    setTimeout(() => {
+        const savedShape = localStorage.getItem('saved_crystal_shape');
+        const savedImage = localStorage.getItem('saved_crystal_image');
+
+        if (savedShape) {
+            setShape(savedShape);
+        }
+
+        if (savedImage) {
+            // Guarantee shape exists before adding image
+            if (!crystal && !savedShape) {
+                setShape('cube'); 
+            }
+            originalImageDataUrl = savedImage;
+            currentImageDataUrl = savedImage;
+            updateCrystalImage(savedImage);
+        }
+    }, 100);
+});
